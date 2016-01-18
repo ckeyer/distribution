@@ -15,6 +15,11 @@ import (
 	"github.com/docker/distribution/registry/api/v2"
 	"github.com/gorilla/handlers"
 	"golang.org/x/net/context"
+
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
+	"os"
+	"path/filepath"
 )
 
 // imageManifestDispatcher takes the request context and builds the
@@ -230,6 +235,21 @@ func (imh *imageManifestHandler) DeleteImageManifest(w http.ResponseWriter, r *h
 			return
 		}
 	}
+
+	/* GEGIN *****************/
+	storageParams := imh.App.Config.Storage.Parameters()
+	dbPath := filepath.Join(fmt.Sprint(storageParams["rootdirectory"]), "registry.sqlite3")
+	os.MkdirAll(filepath.Dir(dbPath), 0755)
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return
+	}
+	query := "delete from tags where repository=? and digest=?"
+	_, err = db.Exec(query, imh.Repository.Name(), imh.Digest.String())
+	if err == nil {
+		_, err = db.Exec("delete from repositories where repository not in (select distinct repository from tags)")
+	}
+	/* END *****************/
 
 	w.WriteHeader(http.StatusAccepted)
 }
